@@ -94,10 +94,10 @@ export const PrivacyModal = ({ isOpen, onClose }: PrivacyModalProps) => {
                                     <br />
                                     By email:{" "}
                                     <a
-                                        href="mailto:privacy@threatavoids.com"
+                                        href="mailto:ajaymuley2799@gmail.com"
                                         className="text-blue-500 hover:underline"
                                     >
-                                        privacy@threatavoids.com
+                                        ajaymuley2799@gmail.com
                                     </a>
                                 </p>
                             </div>

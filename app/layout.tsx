@@ -12,6 +12,11 @@ export const metadata: Metadata = {
     title: "ThreatAvoids — Reinventing LPG Safety with Embedded IoT Intelligence",
     description:
         "ThreatAvoids is building the Sentinel safety ecosystem for LPG cylinders — an IoT-powered, AI-driven safety platform designed for direct OEM integration with major energy providers.",
+    icons: {
+        icon: "/threatavoids-logo.png",
+        shortcut: "/threatavoids-logo.png",
+        apple: "/threatavoids-logo.png",
+    },
 };
 
 export default function RootLayout({
