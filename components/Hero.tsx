@@ -43,7 +43,7 @@ export const Hero = () => {
 
                         <p className="text-lg text-slate-500 mb-10 max-w-lg leading-relaxed">
                             ThreatAvoids is a proposed smart-cylinder ecosystem designed for
-                            direct OEM integration. Our goal: To implant autonomous safety
+                            direct OEM integration. Our goal is to implant autonomous safety
                             sensors and secure delivery protocols directly into the next
                             generation of cylinders from major energy providers.
                         </p>

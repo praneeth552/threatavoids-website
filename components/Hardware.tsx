@@ -24,7 +24,7 @@ export const Hardware = () => {
             color: "red",
             title: "IoT Solenoid Valve",
             description:
-                "An integrated electromechanical valve allows for automatic or manual cut-off. In the event of a detected leak, the system shuts down flow within <50ms.",
+                "An integrated electromechanical valve allows for automatic or manual cut-off. In the event of a detected leak, the system shuts down flow.",
         },
     ];
 
@@ -60,7 +60,7 @@ export const Hardware = () => {
                         The &ldquo;Sentinel&rdquo; Module
                     </h2>
                     <p className="text-lg text-slate-500 leading-relaxed">
-                        A compact, tamper-proof IoT unit designed to be welded onto the
+                        A compact, tamper-proof IoT unit designed to be integrated onto the
                         cylinder collar during manufacturing. It combines AI-driven
                         environmental scanning with active control mechanisms.
                     </p>
