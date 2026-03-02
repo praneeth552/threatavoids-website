@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, PanInfo } from "motion/react";
 import {
     Smartphone,
     QrCode,
@@ -17,6 +17,31 @@ import {
     Battery,
     Signal,
 } from "lucide-react";
+
+/* ──────────────────────────────────────────────────────
+   LIVE CLOCK HOOK — syncs to real device time
+   ────────────────────────────────────────────────────── */
+
+const useLiveClock = () => {
+    const [now, setNow] = useState(new Date());
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const hours = now.getHours();
+    const minutes = now.getMinutes().toString().padStart(2, "0");
+    const h12 = hours % 12 || 12;
+    const timeStr = `${h12}:${minutes}`;
+    const ampm = hours >= 12 ? "PM" : "AM";
+
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const dateStr = `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}`;
+
+    return { timeStr, ampm, dateStr, now };
+};
 
 /* ──────────────────────────────────────────────────────
    TYPES & DATA
@@ -66,19 +91,23 @@ const dummyApps = [
 interface HomeScreenProps {
     onAppLaunch: () => void;
     isLaunching: boolean;
+    timeStr: string;
+    ampm: string;
+    dateStr: string;
 }
 
-const HomeScreen = ({ onAppLaunch, isLaunching }: HomeScreenProps) => {
+const HomeScreen = ({ onAppLaunch, isLaunching, timeStr, ampm, dateStr }: HomeScreenProps) => {
     return (
         <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col pt-8">
 
-            {/* Time display */}
+            {/* Time display — live synced */}
             <div className="text-center mt-4 mb-6">
                 <div className="text-white text-[42px] font-extralight leading-none tracking-tight">
-                    9:41
+                    {timeStr}
+                    <span className="text-[14px] text-white/40 ml-1 font-light">{ampm}</span>
                 </div>
                 <div className="text-white/50 text-[11px] mt-1 font-medium">
-                    Sunday, February 16
+                    {dateStr}
                 </div>
             </div>
 
@@ -145,7 +174,7 @@ const HomeScreen = ({ onAppLaunch, isLaunching }: HomeScreenProps) => {
             </div>
 
             {/* Dock */}
-            <div className="pb-4 pt-2 mx-4">
+            <div className="pb-6 pt-2 mx-4">
                 <div className="flex justify-around bg-white/10 backdrop-blur-xl rounded-[20px] py-2 px-4">
                     {["📞", "✉️", "🧭", "🎵"].map((emoji, i) => (
                         <div key={i} className="w-[44px] h-[44px] rounded-[11px] bg-white/10 flex items-center justify-center text-lg">
@@ -153,11 +182,6 @@ const HomeScreen = ({ onAppLaunch, isLaunching }: HomeScreenProps) => {
                         </div>
                     ))}
                 </div>
-            </div>
-
-            {/* Home indicator */}
-            <div className="flex justify-center pb-2">
-                <div className="w-[100px] h-[4px] bg-white/30 rounded-full" />
             </div>
         </div>
     );
@@ -635,48 +659,112 @@ const ReceiptScreen = () => (
 );
 
 /* ──────────────────────────────────────────────────────
-   PHONE FRAME — realistic device shell
+   PHONE FRAME — realistic device shell with gesture nav
+   Home screen always underneath, app in overlay layer.
+   Swipe-up: app shrinks → rounded corners → flies up.
    ────────────────────────────────────────────────────── */
 
 interface PhoneFrameProps {
-    children: React.ReactNode;
+    homeScreen: React.ReactNode;
+    appScreen: React.ReactNode | null;
+    splashOverlay: React.ReactNode | null;
+    timeStr: string;
+    appOpen: boolean;
+    isClosing: boolean;
+    onSwipeClose: () => void;
 }
 
-const PhoneFrame = ({ children }: PhoneFrameProps) => (
-    <div className="relative mx-auto" style={{ width: 260, height: 530 }}>
-        {/* Outer phone shell */}
-        <div
-            className="absolute inset-0 rounded-[36px] bg-gradient-to-b from-[#2a2a2a] to-[#1a1a1a] shadow-2xl"
-            style={{
-                boxShadow: "0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08) inset, 4px 0 8px rgba(0,0,0,0.3), -4px 0 8px rgba(0,0,0,0.3)",
-            }}
-        />
-        {/* Side buttons */}
-        <div className="absolute -left-[2px] top-[100px] w-[3px] h-[26px] bg-[#333] rounded-l-sm" />
-        <div className="absolute -left-[2px] top-[140px] w-[3px] h-[42px] bg-[#333] rounded-l-sm" />
-        <div className="absolute -left-[2px] top-[190px] w-[3px] h-[42px] bg-[#333] rounded-l-sm" />
-        <div className="absolute -right-[2px] top-[150px] w-[3px] h-[55px] bg-[#333] rounded-r-sm" />
+const PhoneFrame = ({ homeScreen, appScreen, splashOverlay, timeStr, appOpen, isClosing, onSwipeClose }: PhoneFrameProps) => {
+    const dragY = useMotionValue(0);
 
-        {/* Screen bezel */}
-        <div className="absolute inset-[4px] rounded-[32px] bg-black overflow-hidden">
-            {/* Screen content */}
-            {children}
+    const handleDragEnd = (_: unknown, info: PanInfo) => {
+        if ((info.offset.y < -50 || info.velocity.y < -300) && appOpen) {
+            onSwipeClose();
+        }
+    };
 
-            {/* Persistent status bar + notch — always on top */}
-            <div className="absolute top-0 left-0 right-0 z-50 pointer-events-none">
-                <div className="flex items-center justify-between px-5 pt-2 pb-1 text-white text-[11px] font-medium">
-                    <span>9:41</span>
-                    <div className="absolute left-1/2 -translate-x-1/2 top-1 w-[80px] h-[22px] bg-black rounded-full" />
-                    <div className="flex items-center gap-1">
-                        <Signal size={12} />
-                        <Wifi size={12} />
-                        <Battery size={12} />
+    return (
+        <div className="relative mx-auto" style={{ width: 260, height: 530 }}>
+            {/* Outer phone shell */}
+            <div
+                className="absolute inset-0 rounded-[36px] bg-gradient-to-b from-[#2a2a2a] to-[#1a1a1a] shadow-2xl"
+                style={{
+                    boxShadow: "0 25px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08) inset, 4px 0 8px rgba(0,0,0,0.3), -4px 0 8px rgba(0,0,0,0.3)",
+                }}
+            />
+            {/* Side buttons */}
+            <div className="absolute -left-[2px] top-[100px] w-[3px] h-[26px] bg-[#333] rounded-l-sm" />
+            <div className="absolute -left-[2px] top-[140px] w-[3px] h-[42px] bg-[#333] rounded-l-sm" />
+            <div className="absolute -left-[2px] top-[190px] w-[3px] h-[42px] bg-[#333] rounded-l-sm" />
+            <div className="absolute -right-[2px] top-[150px] w-[3px] h-[55px] bg-[#333] rounded-r-sm" />
+
+            {/* Screen bezel */}
+            <div className="absolute inset-[4px] rounded-[32px] bg-black overflow-hidden">
+
+                {/* Layer 0: Home screen — always present underneath */}
+                <div className="absolute inset-0">
+                    {homeScreen}
+                </div>
+
+                {/* Layer 1: App overlay — Container Transform open/close
+                     Open:  scale 0→1, borderRadius 50%→0%, from icon position
+                     Close: scale 1→0, borderRadius 0%→50%, back to icon position
+                     No drag transforms, no style conflicts — clean animation */}
+                <AnimatePresence>
+                    {(appOpen || isClosing) && appScreen && (
+                        <motion.div
+                            className="absolute inset-0 z-10 overflow-hidden"
+                            initial={{ scale: 0, borderRadius: "50%", opacity: 0 }}
+                            animate={isClosing
+                                ? { scale: 0, borderRadius: "50%", opacity: 0 }
+                                : { scale: 1, borderRadius: "0%", opacity: 1 }
+                            }
+                            exit={{ scale: 0, borderRadius: "50%", opacity: 0 }}
+                            transition={isClosing
+                                ? { duration: 0.35, ease: [0.4, 0, 1, 1] }
+                                : { duration: 0.45, ease: [0.2, 0, 0, 1] }
+                            }
+                            style={{ transformOrigin: "82% 55%" }}
+                        >
+                            {appScreen}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Layer 2: Splash screen — separate z-layer, full brightness */}
+                <AnimatePresence>
+                    {splashOverlay}
+                </AnimatePresence>
+
+                {/* Persistent status bar + notch */}
+                <div className="absolute top-0 left-0 right-0 z-30 pointer-events-none">
+                    <div className="flex items-center justify-between px-5 pt-2 pb-1 text-white text-[11px] font-medium">
+                        <span>{timeStr}</span>
+                        <div className="absolute left-1/2 -translate-x-1/2 top-1 w-[80px] h-[22px] bg-black rounded-full" />
+                        <div className="flex items-center gap-1">
+                            <Signal size={12} />
+                            <Wifi size={12} />
+                            <Battery size={12} />
+                        </div>
                     </div>
                 </div>
+
+                {/* Gesture pill — single bar, swipe up to close */}
+                <motion.div
+                    className="absolute bottom-2 left-0 right-0 z-40 flex justify-center cursor-grab active:cursor-grabbing"
+                    drag="y"
+                    dragConstraints={{ top: -100, bottom: 0 }}
+                    dragElastic={0.3}
+                    dragSnapToOrigin
+                    style={{ y: dragY }}
+                    onDragEnd={handleDragEnd}
+                >
+                    <div className="w-[100px] h-[4px] bg-white/50 rounded-full" />
+                </motion.div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 /* ──────────────────────────────────────────────────────
    MAIN DASHBOARD PREVIEW COMPONENT
@@ -737,15 +825,26 @@ export const DashboardPreview = () => {
         }, 1800);
     };
 
-    // Render the current phone screen content
-    const renderScreen = () => {
-        if (!appOpen && !showSplash) {
-            return <HomeScreen onAppLaunch={handleAppLaunch} isLaunching={isLaunching} />;
-        }
+    const [isClosing, setIsClosing] = useState(false);
 
-        // In-app screens based on step
+    const { timeStr, ampm, dateStr } = useLiveClock();
+
+    // Swipe close: play shrink animation, THEN reset state
+    const handleSwipeClose = useCallback(() => {
+        if (isClosing) return;
+        setIsClosing(true);
+        // Wait for close animation to finish, then reset
+        setTimeout(() => {
+            resetFlow();
+            setIsClosing(false);
+        }, 450);
+    }, [isClosing, resetFlow]);
+
+    // Render app screen based on current step
+    const renderAppScreen = () => {
+        if (!appOpen && !isClosing) return null;
+
         const stepId = steps[currentStep]?.id;
-
         switch (stepId) {
             case "qr-scan":
             case "return-qr":
@@ -760,7 +859,7 @@ export const DashboardPreview = () => {
             case "receipt":
                 return <ReceiptScreen />;
             default:
-                return <HomeScreen onAppLaunch={handleAppLaunch} isLaunching={isLaunching} />;
+                return null;
         }
     };
 
@@ -939,39 +1038,36 @@ export const DashboardPreview = () => {
                         transition={{ delay: 0.3 }}
                         className="flex justify-center"
                     >
-                        <PhoneFrame>
-                            {/* Home screen layer — scales back during launch only */}
-                            <motion.div
-                                className="absolute inset-0"
-                                animate={{
-                                    scale: (isLaunching && !appOpen) ? 0.92 : 1,
-                                    opacity: (isLaunching && !appOpen) ? 0.5 : 1,
-                                }}
-                                transition={{
-                                    duration: (isLaunching && !appOpen) ? 0.35 : 0,
-                                    ease: [0.2, 0, 0, 1],
-                                }}
-                                style={{ transformOrigin: "center center" }}
-                            >
-                                <AnimatePresence mode="wait">
-                                    <motion.div
-                                        key={`${activeFlow}-${currentStep}`} // Stable key: doesn't change when splash toggles
-                                        className="absolute inset-0"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.25 }}
-                                    >
-                                        {renderScreen()}
-                                    </motion.div>
-                                </AnimatePresence>
-                            </motion.div>
-
-                            {/* App launch overlay — expands from icon position */}
-                            <AnimatePresence>
-                                {showSplash && <AppLaunchOverlay />}
-                            </AnimatePresence>
-                        </PhoneFrame>
+                        <PhoneFrame
+                            homeScreen={
+                                <motion.div
+                                    className="absolute inset-0"
+                                    animate={{
+                                        scale: (isLaunching && !appOpen) ? 0.92 : 1,
+                                        opacity: (isLaunching && !appOpen) ? 0.5 : 1,
+                                    }}
+                                    transition={{
+                                        duration: (isLaunching && !appOpen) ? 0.35 : 0,
+                                        ease: [0.2, 0, 0, 1],
+                                    }}
+                                    style={{ transformOrigin: "center center" }}
+                                >
+                                    <HomeScreen
+                                        onAppLaunch={handleAppLaunch}
+                                        isLaunching={isLaunching}
+                                        timeStr={timeStr}
+                                        ampm={ampm}
+                                        dateStr={dateStr}
+                                    />
+                                </motion.div>
+                            }
+                            splashOverlay={showSplash ? <AppLaunchOverlay /> : null}
+                            appScreen={renderAppScreen()}
+                            timeStr={timeStr}
+                            appOpen={appOpen}
+                            isClosing={isClosing}
+                            onSwipeClose={handleSwipeClose}
+                        />
                     </motion.div>
                 </div>
             </div>
